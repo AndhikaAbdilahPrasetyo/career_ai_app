@@ -1,5 +1,6 @@
 # 🧭 AI Career Compass
-**AI-Based Career & Major Recommendation System**  
+
+**AI-Based Career & Major Recommendation System**
 Capstone Project - DSGA CAMP Batch 4 | Kelompok 6
 
 ---
@@ -8,27 +9,27 @@ Capstone Project - DSGA CAMP Batch 4 | Kelompok 6
 
 ```
 career_ai_app/
-├── streamlit_app/
-│   ├── app.py                    ← Main app (Home)
-│   └── pages/
-│       ├── 1_📋_Input_Profil.py
-│       ├── 2_🎯_Hasil_Rekomendasi.py
-│       ├── 3_🤖_Chatbot_AI.py
-│       ├── 4_📊_Analisis_Data.py
-│       ├── 5_⚙️_Training_Model.py
-│       └── 6_ℹ️_About.py
+├── app.py                          # Main app (Halaman Home)
+├── pages/
+│   ├── 1_📋_Input_Profil.py       # Halaman input profil siswa
+│   ├── 2_🎯_Hasil_Rekomendasi.py  # Halaman hasil rekomendasijurusan
+│   ├── 3_🤖_Chatbot_AI.py         # Halaman chatbot AI
+│   ├── 4_📊_Analisis_Data.py       # Halaman EDA & visualisasi data
+│   └── 5_⚙️_Training_Model.py    # Halaman training model ML
 ├── src/
-│   ├── database/
-│   │   └── db_connector.py       ← Koneksi MySQL
-│   ├── models/
-│   │   └── ml_model.py           ← ML training & prediksi
-│   ├── agents/
-│   │   └── chatbot_agent.py      ← LangChain + Gemini chatbot
-│   └── utils/
-│       └── visualizations.py    ← Chart & visualisasi
-├── requirements.txt
-├── .env.example
-└── README.md
+│   └── sidebar_nav.py             # Komponen reusable sidebar navigation
+├── db_connector.py                # Koneksi MySQL database
+├── chatbot_agent.py               # LangChain + Gemini chatbot agent
+├── ml_model.py                  # ML training & prediksi
+├── visualizations.py            # Chart & visualisasi Plotly
+├── best_model.pkl             # Model ML terbaik (Random Forest)
+├── random_forest.pkl          # Model Random Forest
+├── xgboost.pkl                # Model XGBoost
+├── mlp.pkl                    # Model MLP
+├── scaler.pkl                 # StandardScaler
+├── label_encoder.pkl         # LabelEncoder
+├── requirements.txt          # Python dependencies
+└── README.md                  # Dokumentasi ini
 ```
 
 ---
@@ -40,7 +41,7 @@ career_ai_app/
 # Pastikan Python 3.9+ sudah terinstall
 python --version
 
-# Clone / buka folder project di VS Code
+# Buka folder project
 cd career_ai_app
 ```
 
@@ -51,12 +52,9 @@ pip install -r requirements.txt
 
 ### 3. Konfigurasi Environment
 ```bash
-# Salin file contoh env
-copy .env.example .env   # Windows
-# atau
-cp .env.example .env     # Mac/Linux
-
-# Edit .env - isi API Key Gemini (GRATIS di aistudio.google.com)
+# Buat file .env jika belum ada
+# Isi dengan API Key Gemini (GRATIS di aistudio.google.com)
+GOOGLE_API_KEY=your_api_key_here
 ```
 
 ### 4. Pastikan Database Aktif
@@ -66,7 +64,7 @@ cp .env.example .env     # Mac/Linux
 ### 5. Jalankan Aplikasi
 ```bash
 # Dari folder career_ai_app/
-streamlit run streamlit_app/app.py
+streamlit run app.py
 ```
 
 Buka browser: **http://localhost:8501**
@@ -75,11 +73,11 @@ Buka browser: **http://localhost:8501**
 
 ## 📋 Alur Penggunaan
 
-1. **Training Model** → Buka halaman `⚙️ Training Model` → Klik "Mulai Training"
-2. **Input Profil** → Isi data diri di `📋 Input Profil`
-3. **Lihat Hasil** → Cek rekomendasi di `🎯 Hasil Rekomendasi`
-4. **Chat AI** → Tanya lebih lanjut di `🤖 Chatbot AI`
-5. **Eksplorasi Data** → Lihat EDA di `📊 Analisis Data`
+1. **Training Model** (Opsional) → Buka halaman `⚙️ Training Model` → Training ulang model jika diperlukan
+2. **Input Profil** → Buka halaman `📋 Input Profil` → Isi data diri, minat, dan preferensi
+3. **Hasil Rekomendasi** → Buka halaman `🎯 Hasil Rekomendasi` → Lihat hasil prediksi jurusan
+4. **Chat AI** → Buka halaman `🤖 Chatbot AI` → Tanya tentang karir, gaji, kampus, dll
+5. **Analisis Data** → Buka halaman `📊 Analisis Data` → Eksplorasi data danvisualisasi
 
 ---
 
@@ -89,7 +87,7 @@ Buka browser: **http://localhost:8501**
 2. Login dengan akun Google
 3. Klik **"Get API Key"** → **"Create API Key"**
 4. Copy API Key
-5. Tempel di sidebar aplikasi atau di file `.env`
+5. Tempel di sidebar aplikasi (halaman Chatbot AI) atau di file `.env`
 
 ---
 
@@ -98,9 +96,9 @@ Buka browser: **http://localhost:8501**
 | Komponen | Teknologi |
 |---|---|
 | Frontend | Streamlit |
-| ML Models | Random Forest, XGBoost, MLP |
-| Generative AI | Google Gemini 1.5 Flash |
+| ML Models | Random Forest, XGBoost, MLP (scikit-learn) |
+| Generative AI | Google Gemini 2.5 Flash |
 | AI Framework | LangChain |
 | Database | MySQL (XAMPP) |
-| Visualisasi | Plotly |
+| Visualisasi | Plotly, Seaborn, Matplotlib |
 | Language | Python 3.9+ |
