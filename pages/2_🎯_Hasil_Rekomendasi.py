@@ -157,11 +157,20 @@ with left_col:
         color = format_score_color(rec["score"])
         badge = score_badge(rec["score"])
 
+        # Tampilkan indikator kecocokan Minat
+        minat_match = rec.get("minat_match", False)
+        minat_badge = ""
+        if minat_match:
+            minat_badge = '<span style="display:inline-block; padding:2px 8px; background:#4FF78E; color:#000; border-radius:10px; font-size:0.75rem; font-weight:600; margin-left:8px;">✓ Cocok Minat</span>'
+        else:
+            minat_badge = '<span style="display:inline-block; padding:2px 8px; background:rgba(255,255,255,0.15); color:rgba(255,255,255,0.6); border-radius:10px; font-size:0.75rem; font-weight:500; margin-left:8px;">Minat</span>'
+
         st.markdown(f"""
         <div class="result-card {rank_class}">
             <h3>
                 <span class="rank-badge {badge_class}">#{i+1}</span>
                 {rec['jurusan']}
+                {minat_badge}
             </h3>
             <div style="display:flex; align-items:center; gap:12px;">
                 <div style="
@@ -206,7 +215,22 @@ if test_connection():
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown(f"**Deskripsi:**\n\n{r['deskripsi']}")
-                    st.markdown(f"**Minat Cocok:** `{r['minat_cocok']}`")
+
+                    # Tampilkan Minat dari siswa dengan highlight
+                    student_minat = data.get("Minat_Utama", "")
+                    student_sekunder = data.get("Minat_Sekunder", "")
+                    minat_display = f"**Minat Saya:** `{student_minat}`"
+                    if student_sekunder:
+                        minat_display += f", `{student_sekunder}`"
+
+                    # Cek cocok atau tidak
+                    is_match = recommendations[0].get("minat_match", False)
+                    match_badge = "✅ Cocok!" if is_match else "⚠️ Perlu Pertimbangan"
+                    match_color = "#4FF78E" if is_match else "#F7E04F"
+
+                    st.markdown(f"**Minat Cocok:** {minat_display}")
+                    st.markdown(f'<span style="color:{match_color}; font-weight:600;">{match_badge}</span>', unsafe_allow_html=True)
+
                     st.markdown(f"**Kepribadian Cocok:** `{r['kepribadian_cocok']}`")
                 with col2:
                     st.markdown(f"**Prospek Karir:**\n\n{r['prospek_karir']}")
@@ -222,11 +246,11 @@ if test_connection():
     with tab2:
         try:
             career_df = get_career_paths(top_jurusan)
-            if career_df.empty:
+            if len(career_df):
                 all_cp = get_career_paths()
                 career_df = all_cp[all_cp["Jurusan"].str.contains(top_jurusan, case=False, na=False)]
 
-            if not career_df.empty:
+            if not len(career_df):
                 st.plotly_chart(chart_career_salary(career_df), use_container_width=True)
                 st.dataframe(
                     career_df[["Karir", "Rata_Gaji_Awal_Juta", "Rata_Gaji_Senior_Juta",
@@ -271,8 +295,9 @@ if test_connection():
 
 st.divider()
 
-# ─── Save hasil ───────────────────────────────────────────────────────────────
-col_save, col_other = st.columns([1, 2])
+# ─── Save hasil & Export PDF ───────────────────────────────────────────────────
+col_save, col_pdf = st.columns([1, 1])
+
 with col_save:
     if st.button("💾 Simpan Hasil ke Database", use_container_width=True):
         try:
@@ -282,5 +307,50 @@ with col_save:
         except Exception as e:
             st.error(f"Error menyimpan: {e}")
 
-with col_other:
-    st.info("💡 Gunakan halaman **Chatbot AI** untuk bertanya lebih lanjut tentang jurusan rekomendasi di atas!")
+with col_pdf:
+    # Get data for PDF
+    try:
+        # Jurisdiction info
+        meta_df = get_jurusan_metadata()
+        meta_row = meta_df[meta_df["jurusan"].str.contains(top_jurusan, case=False, na=False)]
+        jurisdiction_info = {}
+        if len(meta_row) > 0:
+            r = meta_row.iloc[0]
+            jurisdiction_info = {
+                "deskripsi": str(r.get("deskripsi", "")),
+                "prospek_karir": str(r.get("prospek_karir", "")),
+                "skill_dibutuhkan": str(r.get("skill_dibutuhkan", "")),
+            }
+
+        # Career info
+        career_df = get_career_paths(top_jurusan)
+        if not len(career_df):
+            all_cp = get_career_paths()
+            career_df = all_cp[all_cp["Jurusan"].str.contains(top_jurusan, case=False, na=False)]
+
+        # Campus info
+        campus_df = get_kampus_info(top_jurusan)
+        if not len(campus_df):
+            all_k = get_kampus_info()
+            campus_df = all_k[all_k["Jurusan"].str.contains(top_jurusan, case=False, na=False)]
+
+        # Generate PDF
+        from pdf_generator import generate_recommendation_pdf
+        pdf_bytes = generate_recommendation_pdf(
+            student_data=data,
+            recommendations=recommendations,
+            jurisdiction_info=jurisdiction_info,
+            career_info=career_df if len(career_df) else None,
+            campus_info=campus_df if len(campus_df) else None,
+        )
+
+        # Download button
+        st.download_button(
+            label="📄 Download PDF Laporan",
+            data=pdf_bytes,
+            file_name=f"Laporan_Rekomendasi_{data['nama'].replace(' ', '_')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    except Exception as e:
+        st.error(f"Error membuat PDF: {e}")

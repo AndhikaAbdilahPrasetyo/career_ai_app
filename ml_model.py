@@ -181,13 +181,77 @@ def predict_top_n(input_dict: dict, n: int = 5) -> list:
     proba = model.predict_proba(X_scaled)[0]
     classes = encoder.classes_
 
-    # Urutkan dari probabilitas tertinggi
-    top_idx = np.argsort(proba)[::-1][:n]
-    recommendations = []
-    for idx in top_idx:
-        recommendations.append({
+    # Minat dari siswa
+    minat_utama = input_dict.get("Minat_Utama", MINAT_LIST[0])
+    minat_sek = input_dict.get("Minat_Sekunder", minat_utama)
+
+    # Mapping Minat ke Jurusan yang cocok
+    MINAT_JURUSAN_MAP = {
+        "Teknologi & Komputer": ["Informatika", "Teknik Komputer", "Sistem Informasi", "Teknik Elektro"],
+        "Bisnis & Keuangan": ["Akuntansi", "Manajemen", "Ekonomi", "Keuangan", "Bisnis Digital"],
+        "Hukum & Sosial": ["Hukum", "Ilmu Komunikasi", "Hubungan Internasional", "Sosiologi", "Ilmu Politik"],
+        "Kesehatan & Medis": ["Kedokteran", "Kedokteran Gigi", "Farmasi", "Keperawatan"],
+        "Sains & Penelitian": ["Fisika", "Kimia", "Biologi", "Matematika"],
+        "Teknik & Konstruksi": ["Teknik Sipil", "Arsitektur", "Teknik Mesin", "Teknik Industri"],
+        "Seni & Desain": ["Desain Komunikasi Visual", "Seni Rupa", "Desain Interior", "Film"],
+        "Pendidikan & Pengajaran": ["Pendidikan Guru", "Pendidikan Bahasa", "Bimbingan Konseling"],
+    }
+
+    def _calculate_minat_boost(jurr: str, minat_utama: str, minat_sekunder: str = None) -> tuple:
+        """Hitung bonus dan cek kecocokan berdasarkan Minat."""
+        bonus = 0  # Bonus dalam poin (0-30)
+        is_matched = False
+        j_lower = jurr.lower()
+
+        # Cek kecocokan utama
+        cocok_jurusans = MINAT_JURUSAN_MAP.get(minat_utama, [])
+        for j in cocok_jurusans:
+            if j.lower() in j_lower:
+                bonus = 30  # Bonus 30 poin
+                is_matched = True
+                break
+
+        # Cek sekunder jika tidak cocok dengan utama
+        if not is_matched and minat_sekunder:
+            cocok_jurusans = MINAT_JURUSAN_MAP.get(minat_sekunder, [])
+            for j in cocok_jurusans:
+                if j.lower() in j_lower:
+                    bonus = 15  # Bonus 15 poin
+                    is_matched = True
+                    break
+
+        return bonus, is_matched
+
+    # Hitung skor yang disesuaikan dengan Minat
+    adjusted_scores = []
+    for idx, p in enumerate(proba):
+        universitas = classes[idx]
+        bonus, is_matched = _calculate_minat_boost(universitas, minat_utama, minat_sek)
+        # Skor dalam %, lalu tambahkan bonus (maks 100 + 30 = 130, lalu di-clamp ke 100)
+        base_score = float(p) * 100  # Konversi ke %
+        adjusted_score = min(100, base_score + bonus)  # clamp ke max 100%
+        adjusted_scores.append({
+            "idx": idx,
+            "score": p,
+            "adjusted_score": adjusted_score,
+            "base_score": base_score,
+            "bonus": bonus,
             "jurusan": classes[idx],
-            "score": round(float(proba[idx]) * 100, 1),
+            "is_minat_matched": is_matched
+        })
+
+    # Urutkan berdasarkan adjusted score
+    adjusted_scores.sort(key=lambda x: x["adjusted_score"], reverse=True)
+
+    # Ambil top N
+    recommendations = []
+    for item in adjusted_scores[:n]:
+        recommendations.append({
+            "jurusan": item["jurusan"],
+            "score": round(item["adjusted_score"], 1),
+            "base_score": round(item["base_score"], 1),
+            "bonus": item["bonus"],
+            "minat_match": item["is_minat_matched"],
         })
 
     return recommendations

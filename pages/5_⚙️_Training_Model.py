@@ -116,7 +116,8 @@ st.divider()
 from db_connector import get_student_profiles, test_connection
 from ml_model import (
     train_models, is_model_trained, get_model_comparison,
-    RF_PATH, XGB_PATH, MLP_PATH, BEST_MODEL_PATH
+    RF_PATH, XGB_PATH, MLP_PATH, BEST_MODEL_PATH, SCALER_PATH,
+    FEATURE_COLS, prepare_data, ENCODER_PATH
 )
 
 if not test_connection():
@@ -275,9 +276,12 @@ if "training_results" in st.session_state:
 
 st.divider()
 
-# ─── Informasi Feature Importance ────────────────────────────────────────────
+# ─── Feature Importance ────────────────────────────────────────────
+st.subheader("🔍 Feature Importance")
+
+# ─── Random Forest ────────────────────────────────────────────
 if os.path.exists(RF_PATH):
-    with st.expander("🔍 Feature Importance (Random Forest)"):
+    with st.expander("🌲 Random Forest"):
         try:
             import joblib
             from ml_model import FEATURE_COLS
@@ -285,16 +289,86 @@ if os.path.exists(RF_PATH):
             importances = pd.DataFrame({
                 "Feature": FEATURE_COLS,
                 "Importance": rf.feature_importances_,
-            }).sort_values("Importance", ascending=False)
+            }).sort_values("Importance", ascending=False).head(10)
 
             fig = px.bar(importances, x="Importance", y="Feature", orientation="h",
-                         title="Feature Importance",
+                         title="Random Forest - Feature Importance",
                          color="Importance", color_continuous_scale="Blues")
             fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                               title_font_color="white",
                               xaxis=dict(color="white"), yaxis=dict(color="white"),
-                              showlegend=False)
-            fig.update_traces(showscale=False)
+                              showlegend=False, height=350)
             st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
-            st.warning(f"Tidak bisa load feature importance: {e}")
+            st.warning(f"Tidak bisa load RF: {e}")
+
+# ─── XGBoost ────────────────────────────────────────────
+if os.path.exists(XGB_PATH):
+    with st.expander("🚀 XGBoost"):
+        try:
+            import joblib
+            from ml_model import FEATURE_COLS
+            xgb = joblib.load(XGB_PATH)
+            importances = pd.DataFrame({
+                "Feature": FEATURE_COLS,
+                "Importance": xgb.feature_importances_,
+            }).sort_values("Importance", ascending=False).head(10)
+
+            fig = px.bar(importances, x="Importance", y="Feature", orientation="h",
+                         title="XGBoost - Feature Importance",
+                         color="Importance", color_continuous_scale="Oranges")
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              title_font_color="white",
+                              xaxis=dict(color="white"), yaxis=dict(color="white"),
+                              showlegend=False, height=350)
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Tidak bisa load XGBoost: {e}")
+
+# ─── Neural Network (MLP) ────────────────────────────────────────────
+if os.path.exists(MLP_PATH):
+    with st.expander("🧠 Neural Network (MLP)"):
+        try:
+            import joblib
+            from ml_model import FEATURE_COLS
+            from sklearn.inspection import permutation_importance
+            from sklearn.preprocessing import LabelEncoder
+
+            mlp = joblib.load(MLP_PATH)
+            scaler = joblib.load(SCALER_PATH)
+            encoder = joblib.load(ENCODER_PATH)
+
+            # Load data untuk permutation importance dari database
+            df = get_student_profiles()
+            if df.empty:
+                st.warning("Data kosong, tidak bisa hitung permutation importance")
+            else:
+                X, y = prepare_data(df)
+                X_scaled = scaler.transform(X)
+                y_encoded = encoder.transform(y)
+
+                # Hitung permutation importance dengan scoring f1_weighted
+                with st.spinner("Menghitung permutation importance..."):
+                    perm_result = permutation_importance(
+                        mlp, X_scaled, y_encoded,
+                        scoring="f1_weighted",
+                        n_repeats=3,
+                        random_state=42,
+                        n_jobs=-1
+                    )
+                importances = pd.DataFrame({
+                    "Feature": FEATURE_COLS,
+                    "Importance": perm_result.importances_mean,
+                }).sort_values("Importance", ascending=False).head(10)
+
+                fig = px.bar(importances, x="Importance", y="Feature", orientation="h",
+                             title="Neural Network - Permutation Importance",
+                             color="Importance", color_continuous_scale="Purples")
+                fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                                  title_font_color="white",
+                                  xaxis=dict(color="white"), yaxis=dict(color="white"),
+                                  showlegend=False, height=350)
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption("Note: Menggunakan permutation importance karena MLP tidak memiliki feature_importances_")
+        except Exception as e:
+            st.error(f"Tidak bisa load MLP: {e}")

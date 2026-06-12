@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"from ml_model import predict_top_n; print\\(''OK''\\)\")",
+      "Bash(python -c \"import pages.2_🎯_Hasil_Rekomendasi; print\\(''OK''\\)\")",
+      "Bash(python -m py_compile \"pages/2_🎯_Hasil_Rekomendasi.py\")"
+    ]
+  }
+}

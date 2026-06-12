@@ -224,4 +224,4 @@ def score_badge(score: float) -> str:
     elif score >= 50:
         return "🟡 Cukup Cocok"
     else:
-        return "🔴 Kurang Cocok"
+        return ""
