@@ -200,38 +200,77 @@ st.divider()
 
 # ─── Detail per jurusan ───────────────────────────────────────────────────────
 if test_connection():
-    top_jurusan = recommendations[0]["jurusan"]
+    # Dropdown untuk memilih nomor rekomendasi
+    rec_options = [f"#{i+1} - {rec['jurusan']}" for i, rec in enumerate(recommendations)]
+    selected_rec_index = st.selectbox(
+        "Pilih Rekomendasi Jurusan untuk Dilihat Detailnya:",
+        options=range(len(recommendations)),
+        format_func=lambda x: rec_options[x],
+        index=0,
+        key="rec_selector"
+    )
 
-    st.markdown(f"### 📊 Detail: **{top_jurusan}** (Rekomendasi #1)")
+    # Gunakan rekomendasi yang dipilih
+    selected_rec = recommendations[selected_rec_index]
+    selected_jurusan = selected_rec["jurusan"]
+
+    st.markdown(f"### 📊 Detail: **{selected_jurusan}** (Rekomendasi #{selected_rec_index + 1} - Skor {selected_rec['score']:.1f}%)")
 
     tab1, tab2, tab3 = st.tabs(["📚 Info Jurusan", "💼 Karir & Gaji", "🏫 Kampus Rekomendasi"])
 
     with tab1:
         try:
             meta_df = get_jurusan_metadata()
-            row = meta_df[meta_df["jurusan"].str.contains(top_jurusan, case=False, na=False)]
+            row = meta_df[meta_df["jurusan"].str.contains(selected_jurusan, case=False, na=False)]
             if not row.empty:
                 r = row.iloc[0]
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown(f"**Deskripsi:**\n\n{r['deskripsi']}")
 
-                    # Tampilkan Minat dari siswa dengan highlight
+                    # Tampilkan Minat dari siswa
                     student_minat = data.get("Minat_Utama", "")
                     student_sekunder = data.get("Minat_Sekunder", "")
-                    minat_display = f"**Minat Saya:** `{student_minat}`"
-                    if student_sekunder:
-                        minat_display += f", `{student_sekunder}`"
 
                     # Cek cocok atau tidak
-                    is_match = recommendations[0].get("minat_match", False)
+                    is_match = selected_rec.get("minat_match", False)
                     match_badge = "✅ Cocok!" if is_match else "⚠️ Perlu Pertimbangan"
                     match_color = "#4FF78E" if is_match else "#F7E04F"
 
-                    st.markdown(f"**Minat Cocok:** {minat_display}")
-                    st.markdown(f'<span style="color:{match_color}; font-weight:600;">{match_badge}</span>', unsafe_allow_html=True)
+                    # Tampilkan minat siswa dengan badge kecocokan per juridusan
+                    # Cek minat yang cocok untuk juridusan ini
+                    from ml_model import JURUSAN_MINAT_MAP
+                    Jurusan_minat = JURUSAN_MINAT_MAP.get(selected_jurusan, "")
 
-                    st.markdown(f"**Kepribadian Cocok:** `{r['kepribadian_cocok']}`")
+                    st.markdown(f"**Minat Saya:**")
+                    if student_minat or student_sekunder:
+                        # Semua minat yang diinput user
+                        semua_minat_user = []
+                        if student_minat:
+                            semua_minat_user.append(student_minat)
+                        if student_sekunder and student_sekunder != student_minat:
+                            semua_minat_user.append(student_sekunder)
+
+                        # Tampilkan masing-masing dengan badge yang sesuai
+                        for m in semua_minat_user:
+                            # Cek cocok atau tidak untuk juridusan ini
+                            cocok = (m == Jurusan_minat)
+                            badge = "✅" if cocok else "⚠️"
+                            st.markdown(f"  - `{m}` {badge}")
+                    else:
+                        st.markdown("- (tidak diisi)")
+
+                    # Status sudah ditampilkan di masing-masing minat di atas
+
+                    # Tampilkan kepribadian siswa
+                    student_kepribadian = data.get("Tipe_Kepribadian", "")
+                    db_kepribadian = r.get("kepribadian_cocok", "")
+                    is_kepribadian_match = student_kepribadian.lower() == db_kepribadian.lower() if student_kepribadian and db_kepribadian else False
+                    kepribadian_badge = "✅ Cocok!" if is_kepribadian_match else "⚠️ Perlu Pertimbangan"
+                    kepribadian_color = "#4FF78E" if is_kepribadian_match else "#F7E04F"
+
+                    st.markdown(f"**Kepribadian Saya:** `{student_kepribadian}`")
+                    st.markdown(f'<span style="color:{kepribadian_color}; font-weight:600;">{kepribadian_badge}</span>', unsafe_allow_html=True)
                 with col2:
                     st.markdown(f"**Prospek Karir:**\n\n{r['prospek_karir']}")
                     skills = [s.strip() for s in str(r['skill_dibutuhkan']).split(",")]
@@ -239,21 +278,30 @@ if test_connection():
                     for sk in skills:
                         st.markdown(f"  - {sk}")
             else:
-                st.info(f"Info detail untuk '{top_jurusan}' belum tersedia.")
+                st.info(f"Info detail untuk '{selected_jurusan}' belum tersedia.")
         except Exception as e:
             st.error(f"Error: {e}")
 
     with tab2:
         try:
-            career_df = get_career_paths(top_jurusan)
-            if len(career_df):
+            career_df = get_career_paths(selected_jurusan)
+            if career_df.empty:
                 all_cp = get_career_paths()
-                career_df = all_cp[all_cp["Jurusan"].str.contains(top_jurusan, case=False, na=False)]
+                career_df = all_cp[all_cp["Jurusan"].str.contains(selected_jurusan, case=False, na=False)]
 
-            if not len(career_df):
-                st.plotly_chart(chart_career_salary(career_df), use_container_width=True)
+            if not career_df.empty:
+                # Slider untuk memilih jumlah karir yang ditampilkan
+                num_careers = st.slider(
+                    "Jumlah Karir yang Ditampilkan",
+                    min_value=1,
+                    max_value=min(10, len(career_df)),
+                    value=min(6, len(career_df))
+                )
+                
+                df_show = career_df.head(num_careers)
+                st.plotly_chart(chart_career_salary(df_show), use_container_width=True)
                 st.dataframe(
-                    career_df[["Karir", "Rata_Gaji_Awal_Juta", "Rata_Gaji_Senior_Juta",
+                    df_show[["Karir", "Rata_Gaji_Awal_Juta", "Rata_Gaji_Senior_Juta",
                                "Tingkat_Permintaan_Pasar", "Growth_5yr_Persen"]].rename(columns={
                         "Rata_Gaji_Awal_Juta": "Gaji Awal (jt)",
                         "Rata_Gaji_Senior_Juta": "Gaji Senior (jt)",
@@ -269,10 +317,10 @@ if test_connection():
 
     with tab3:
         try:
-            kampus_df = get_kampus_info(top_jurusan)
+            kampus_df = get_kampus_info(selected_jurusan)
             if kampus_df.empty:
                 all_k = get_kampus_info()
-                kampus_df = all_k[all_k["Jurusan"].str.contains(top_jurusan, case=False, na=False)]
+                kampus_df = all_k[all_k["Jurusan"].str.contains(selected_jurusan, case=False, na=False)]
 
             if not kampus_df.empty:
                 # Filter by budget if available
@@ -310,37 +358,44 @@ with col_save:
 with col_pdf:
     # Get data for PDF
     try:
-        # Jurisdiction info
+        # Ambil SEMUA info juridusan untuk setiap rekomendasi
         meta_df = get_jurusan_metadata()
-        meta_row = meta_df[meta_df["jurusan"].str.contains(top_jurusan, case=False, na=False)]
-        jurisdiction_info = {}
-        if len(meta_row) > 0:
-            r = meta_row.iloc[0]
-            jurisdiction_info = {
-                "deskripsi": str(r.get("deskripsi", "")),
-                "prospek_karir": str(r.get("prospek_karir", "")),
-                "skill_dibutuhkan": str(r.get("skill_dibutuhkan", "")),
-            }
+        all_jurusan_info = {}
+        for rec in recommendations:
+            jur = rec["jurusan"]
+            row = meta_df[meta_df["jurusan"].str.contains(jur, case=False, na=False)]
+            if not row.empty:
+                r = row.iloc[0]
+                all_jurusan_info[jur] = {
+                    "deskripsi": str(r.get("deskripsi", "")),
+                    "prospek_karir": str(r.get("prospek_karir", "")),
+                    "skill_dibutuhkan": str(r.get("skill_dibutuhkan", "")),
+                }
 
-        # Career info
-        career_df = get_career_paths(top_jurusan)
-        if not len(career_df):
-            all_cp = get_career_paths()
-            career_df = all_cp[all_cp["Jurusan"].str.contains(top_jurusan, case=False, na=False)]
+        # Ambil SEMUA career info untuk setiap rekomendasi
+        all_career_info = {}
+        for rec in recommendations:
+            jur = rec["jurusan"]
+            career_df_perjur = get_career_paths(jur)
+            if career_df_perjur.empty:
+                all_cp = get_career_paths()
+                career_df_perjur = all_cp[all_cp["Jurusan"].str.contains(jur, case=False, na=False)]
+            if not career_df_perjur.empty:
+                all_career_info[jur] = career_df_perjur
 
-        # Campus info
-        campus_df = get_kampus_info(top_jurusan)
+        # Campus info (dari juridusan yang dipilih di dropdown)
+        campus_df = get_kampus_info(selected_jurusan)
         if not len(campus_df):
             all_k = get_kampus_info()
-            campus_df = all_k[all_k["Jurusan"].str.contains(top_jurusan, case=False, na=False)]
+            campus_df = all_k[all_k["Jurusan"].str.contains(selected_jurusan, case=False, na=False)]
 
         # Generate PDF
         from pdf_generator import generate_recommendation_pdf
         pdf_bytes = generate_recommendation_pdf(
             student_data=data,
             recommendations=recommendations,
-            jurisdiction_info=jurisdiction_info,
-            career_info=career_df if len(career_df) else None,
+            all_jurusan_info=all_jurusan_info,
+            all_career_info=all_career_info,
             campus_info=campus_df if len(campus_df) else None,
         )
 

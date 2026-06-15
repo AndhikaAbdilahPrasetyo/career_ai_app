@@ -9,8 +9,8 @@ from fpdf import FPDF
 def generate_recommendation_pdf(
     student_data: dict,
     recommendations: list,
-    jurisdiction_info: dict = None,
-    career_info: list = None,
+    all_jurusan_info: dict = None,
+    all_career_info: dict = None,
     campus_info: list = None,
 ) -> bytes:
     """
@@ -151,63 +151,110 @@ def generate_recommendation_pdf(
     pdf.ln(10)
 
     # ─── Bagian 3: Info Jurusan (Detail) ─────────────────────────────────────
-    if jurisdiction_info:
+    if all_jurusan_info:
         pdf.add_page()
         pdf.set_font("helvetica", "B", 14)
         pdf.set_fill_color(*PRIMARY_COLOR)
-        pdf.cell(0, 10, f"3. Detail: {recommendations[0]['jurusan']}", ln=True, fill=True)
+        pdf.cell(0, 10, "3. Detail Semua Rekomendasi Jurusan", ln=True, fill=True)
         pdf.ln(3)
 
-        # Deskripsi
-        if jurisdiction_info.get("deskripsi"):
-            pdf.set_font("helvetica", "B", 11)
-            pdf.cell(0, 8, "Deskripsi:", ln=True)
-            pdf.set_font("helvetica", "", 10)
-            pdf.multi_cell(0, 6, jurisdiction_info.get("deskripsi", "-"))
-            pdf.ln(3)
+        # Loop untuk setiap rekomendasi
+        for i, rec in enumerate(recommendations):
+            jurusAN = rec.get("jurusan", "-")
+            score = rec.get("score", 0)
+            minat_match = rec.get("minat_match", False)
 
-        # Prospek Karir
-        if jurisdiction_info.get("prospek_karir"):
-            pdf.set_font("helvetica", "B", 11)
-            pdf.cell(0, 8, "Prospek Karir:", ln=True)
-            pdf.set_font("helvetica", "", 10)
-            pdf.multi_cell(0, 6, jurisdiction_info.get("prospek_karir", "-"))
-            pdf.ln(3)
+            # Cek ruang足够的 di页面, jika tidak buat页面 baru
+            if pdf.get_y() > 220:
+                pdf.add_page()
 
-        # Skill Dibutuhkan
-        if jurisdiction_info.get("skill_dibutuhkan"):
-            pdf.set_font("helvetica", "B", 11)
-            pdf.cell(0, 8, "Skill Dibutuhkan:", ln=True)
-            pdf.set_font("helvetica", "", 10)
-            pdf.multi_cell(0, 6, jurisdiction_info.get("skill_dibutuhkan", "-"))
-            pdf.ln(3)
+            pdf.set_font("helvetica", "B", 12)
+            pdf.cell(10, 8, f"#{i+1}.")
+            pdf.cell(0, 8, f"{jurusAN} ({score:.1f}%)", ln=True)
 
-        pdf.ln(10)
+            # Ambil info dari all_jurusan_info
+            j_info = all_jurusan_info.get(jurusAN, {})
+
+            # Deskripsi
+            if j_info.get("deskripsi"):
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "Deskripsi:", ln=True)
+                pdf.set_font("helvetica", "", 9)
+                pdf.multi_cell(0, 5, j_info.get("deskripsi", "-"))
+                pdf.ln(2)
+
+            # Prospek Karir
+            if j_info.get("prospek_karir"):
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "Prospek Karir:", ln=True)
+                pdf.set_font("helvetica", "", 9)
+                pdf.multi_cell(0, 5, j_info.get("prospek_karir", "-"))
+                pdf.ln(2)
+
+            # Skill Dibutuhkan
+            if j_info.get("skill_dibutuhkan"):
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "Skill Dibutuhkan:", ln=True)
+                pdf.set_font("helvetica", "", 9)
+                pdf.multi_cell(0, 5, j_info.get("skill_dibutuhkan", "-"))
+                pdf.ln(2)
+
+            # Status Minat Cocok
+            status_minat = "[Cocok Minat]" if minat_match else ""
+            if status_minat:
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, status_minat, ln=True)
+
+            pdf.ln(5)
+            pdf.set_line_width(0.5)
+            pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+            pdf.set_line_width(0.3)
+            pdf.ln(3)
 
     # ─── Bagian 4: Info Karir & Gaji ────────────────────────────────────
-    if career_info is not None and not career_info.empty:
+    if all_career_info:
         pdf.add_page()
         pdf.set_font("helvetica", "B", 14)
         pdf.set_fill_color(*PRIMARY_COLOR)
-        pdf.cell(0, 10, "4. Karir & Prospek Gaji", ln=True, fill=True)
+        pdf.cell(0, 10, "4. Karir & Prospek Gaji (Semua Rekomendasi)", ln=True, fill=True)
         pdf.ln(3)
 
-        pdf.set_font("helvetica", "B", 10)
-        pdf.cell(60, 8, "Karir", border=1)
-        pdf.cell(35, 8, "Gaji Awal (Jt)", border=1)
-        pdf.cell(35, 8, "Gaji Senior (Jt)", border=1)
-        pdf.cell(30, 8, "Demand", border=1)
-        pdf.ln()
+        # Loop untuk setiap rekomendasi
+        for i, rec in enumerate(recommendations):
+            jurusAN = rec.get("jurusan", "-")
+            career_df = all_career_info.get(jurusAN)
 
-        pdf.set_font("helvetica", "", 9)
-        for _, row in career_info.iterrows():
-            pdf.cell(60, 7, str(row.get("Karir", "-"))[:30], border=1)
-            pdf.cell(35, 7, f"Rp {row.get('Rata_Gaji_Awal_Juta', 0)}", border=1)
-            pdf.cell(35, 7, f"Rp {row.get('Rata_Gaji_Senior_Juta', 0)}", border=1)
-            pdf.cell(30, 7, str(row.get("Tingkat_Permintaan_Pasar", "-")), border=1)
-            pdf.ln()
+            # Cek ruang cukup di page, jika tidak buat page baru
+            if pdf.get_y() > 200:
+                pdf.add_page()
 
-        pdf.ln(10)
+            pdf.set_font("helvetica", "B", 11)
+            pdf.cell(10, 8, f"#{i+1}.")
+            pdf.cell(0, 8, jurusAN, ln=True)
+            pdf.ln(2)
+
+            if career_df is not None and not career_df.empty:
+                pdf.set_font("helvetica", "B", 9)
+                pdf.cell(50, 6, "Karir", border=1)
+                pdf.cell(30, 6, "Gaji Awal", border=1)
+                pdf.cell(30, 6, "Gaji Senior", border=1)
+                pdf.cell(30, 6, "Demand", border=1)
+                pdf.cell(25, 6, "Growth", border=1)
+                pdf.ln()
+
+                pdf.set_font("helvetica", "", 8)
+                for _, row in career_df.iterrows():
+                    pdf.cell(50, 5, str(row.get("Karir", "-"))[:25], border=1)
+                    pdf.cell(30, 5, f"Rp {row.get('Rata_Gaji_Awal_Juta', 0)}", border=1)
+                    pdf.cell(30, 5, f"Rp {row.get('Rata_Gaji_Senior_Juta', 0)}", border=1)
+                    pdf.cell(30, 5, str(row.get("Tingkat_Permintaan_Pasar", "-")), border=1)
+                    pdf.cell(25, 5, f"{row.get('Growth_5yr_Persen', 0)}%", border=1)
+                    pdf.ln()
+            else:
+                pdf.set_font("helvetica", "", 9)
+                pdf.cell(0, 6, "Data karir belum tersedia", ln=True)
+
+            pdf.ln(5)
 
     # ─── Bagian 5: Kampus Rekomendasi ────────────────────────────────────────────
     if campus_info is not None and not campus_info.empty:

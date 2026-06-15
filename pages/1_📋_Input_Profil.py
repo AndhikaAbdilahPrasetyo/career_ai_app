@@ -162,11 +162,16 @@ with st.form("profil_form"):
 
     mc1, mc2, mc3 = st.columns(3)
     with mc1:
-        minat_utama = st.selectbox("Minat Utama", MINAT_OPTIONS)
+        minat_utama = st.selectbox("Minat Utama", MINAT_OPTIONS, index=0)
+
+    # Default index untuk Minat Sekunder (samakan dengan Minat Utama)
+    default_idx = MINAT_OPTIONS.index(minat_utama) if minat_utama in MINAT_OPTIONS else 0
     with mc2:
         minat_sek = st.selectbox(
             "Minat Sekunder",
-            [m for m in MINAT_OPTIONS if m != minat_utama]
+            MINAT_OPTIONS,
+            index=default_idx,
+            help="Bisa sama dengan Minat Utama"
         )
     with mc3:
         kepribadian = st.selectbox(

@@ -145,47 +145,31 @@ def load_models():
 
 def predict_top_n(input_dict: dict, n: int = 5) -> list:
     """
-    input_dict: dict berisi nilai & info siswa (key = nama kolom asli)
-    Kembalikan list of dict: [{'jurusan': ..., 'score': ...}, ...]
+    Hitung skor kecocokan berdasarkan nilai input siswa secara langsung.
+    Skor = Nilai Akademik (40%) + Minat (30%) + Kepribadian (15%) + Soft Skills (15%)
     """
-    model, scaler, encoder = load_models()
+    # Ambil data dari input
+    nilai_mtk = input_dict.get("Nilai_Matematika", 0)
+    nilai_indo = input_dict.get("Nilai_Bahasa_Indonesia", 0)
+    nilai_eng = input_dict.get("Nilai_Bahasa_Inggris", 0)
+    nilai_ipa = input_dict.get("Nilai_IPA", 0)
+    nilai_fisika = input_dict.get("Nilai_Fisika", 0)
+    nilai_kimia = input_dict.get("Nilai_Kimia", 0)
+    nilai_bio = input_dict.get("Nilai_Biologi", 0)
+    nilai_eko = input_dict.get("Nilai_Ekonomi", 0)
+    nilai_geo = input_dict.get("Nilai_Geografi", 0)
+    nilai_sos = input_dict.get("Nilai_Sosiologi", 0)
 
-    # Buat dataframe dari input
-    row = {col: 0 for col in FEATURE_COLS}
+    skill_analitis = input_dict.get("Kemampuan_Analitis", 5)
+    skill_kreatif = input_dict.get("Kemampuan_Kreatif", 5)
+    skill_sosial = input_dict.get("Kemampuan_Sosial", 5)
+    skill_leadership = input_dict.get("Kemampuan_Leadership", 5)
 
-    # Nilai akademik
-    for col in [
-        "Nilai_Matematika", "Nilai_Bahasa_Indonesia", "Nilai_Bahasa_Inggris",
-        "Nilai_IPA", "Nilai_Fisika", "Nilai_Kimia", "Nilai_Biologi",
-        "Nilai_Ekonomi", "Nilai_Geografi", "Nilai_Sosiologi",
-        "Kemampuan_Analitis", "Kemampuan_Kreatif",
-        "Kemampuan_Sosial", "Kemampuan_Leadership",
-    ]:
-        row[col] = input_dict.get(col, 0)
-
-    # Encode categorical
-    minat_utama = input_dict.get("Minat_Utama", MINAT_LIST[0])
-    minat_sek   = input_dict.get("Minat_Sekunder", minat_utama)
-    kepribadian = input_dict.get("Tipe_Kepribadian", KEPRIBADIAN_LIST[0])
-    sekolah     = input_dict.get("Asal_Sekolah_Tipe", SEKOLAH_LIST[0])
-
-    row["Minat_Utama_enc"] = MINAT_LIST.index(minat_utama) if minat_utama in MINAT_LIST else 0
-    row["Minat_Sekunder_enc"] = MINAT_LIST.index(minat_sek) if minat_sek in MINAT_LIST else 0
-    row["Tipe_Kepribadian_enc"] = KEPRIBADIAN_LIST.index(kepribadian) if kepribadian in KEPRIBADIAN_LIST else 0
-    row["Asal_Sekolah_Tipe_enc"] = SEKOLAH_LIST.index(sekolah) if sekolah in SEKOLAH_LIST else 0
-
-    X = np.array([[row[c] for c in FEATURE_COLS]], dtype=float)
-    X_scaled = scaler.transform(X)
-
-    # Dapatkan probabilitas untuk setiap kelas
-    proba = model.predict_proba(X_scaled)[0]
-    classes = encoder.classes_
-
-    # Minat dari siswa
     minat_utama = input_dict.get("Minat_Utama", MINAT_LIST[0])
     minat_sek = input_dict.get("Minat_Sekunder", minat_utama)
+    kepribadian = input_dict.get("Tipe_Kepribadian", KEPRIBADIAN_LIST[0])
 
-    # Mapping Minat ke Jurusan yang cocok
+    # Mapping Minat ke Jurusan
     MINAT_JURUSAN_MAP = {
         "Teknologi & Komputer": ["Informatika", "Teknik Komputer", "Sistem Informasi", "Teknik Elektro"],
         "Bisnis & Keuangan": ["Akuntansi", "Manajemen", "Ekonomi", "Keuangan", "Bisnis Digital"],
@@ -197,62 +181,206 @@ def predict_top_n(input_dict: dict, n: int = 5) -> list:
         "Pendidikan & Pengajaran": ["Pendidikan Guru", "Pendidikan Bahasa", "Bimbingan Konseling"],
     }
 
-    def _calculate_minat_boost(jurr: str, minat_utama: str, minat_sekunder: str = None) -> tuple:
-        """Hitung bonus dan cek kecocokan berdasarkan Minat."""
-        bonus = 0  # Bonus dalam poin (0-30)
-        is_matched = False
-        j_lower = jurr.lower()
+    # Mapping Jurusan ke Minat yang cocok
+    JURUSAN_MINAT_MAP = {
+        "Informatika": "Teknologi & Komputer",
+        "Teknik Komputer": "Teknologi & Komputer",
+        "Sistem Informasi": "Teknologi & Komputer",
+        "Teknik Elektro": "Teknologi & Komputer",
+        "Akuntansi": "Bisnis & Keuangan",
+        "Manajemen": "Bisnis & Keuangan",
+        "Ekonomi": "Bisnis & Keuangan",
+        "Keuangan": "Bisnis & Keuangan",
+        "Bisnis Digital": "Bisnis & Keuangan",
+        "Hukum": "Hukum & Sosial",
+        "Ilmu Komunikasi": "Hukum & Sosial",
+        "Hubungan Internasional": "Hukum & Sosial",
+        "Sosiologi": "Hukum & Sosial",
+        "Ilmu Politik": "Hukum & Sosial",
+        "Kedokteran": "Kesehatan & Medis",
+        "Kedokteran Gigi": "Kesehatan & Medis",
+        "Farmasi": "Kesehatan & Medis",
+        "Keperawatan": "Kesehatan & Medis",
+        "Fisika": "Sains & Penelitian",
+        "Kimia": "Sains & Penelitian",
+        "Biologi": "Sains & Penelitian",
+        "Matematika": "Sains & Penelitian",
+        "Teknik Sipil": "Teknik & Konstruksi",
+        "Arsitektur": "Teknik & Konstruksi",
+        "Teknik Mesin": "Teknik & Konstruksi",
+        "Teknik Industri": "Teknik & Konstruksi",
+        "Desain Komunikasi Visual": "Seni & Desain",
+        "Seni Rupa": "Seni & Desain",
+        "Desain Interior": "Seni & Desain",
+        "Film": "Seni & Desain",
+        "Pendidikan Guru": "Pendidikan & Pengajaran",
+        "Pendidikan Bahasa": "Pendidikan & Pengajaran",
+        "Bimbingan Konseling": "Pendidikan & Pengajaran",
+    }
 
-        # Cek kecocokan utama
-        cocok_jurusans = MINAT_JURUSAN_MAP.get(minat_utama, [])
-        for j in cocok_jurusans:
-            if j.lower() in j_lower:
-                bonus = 30  # Bonus 30 poin
-                is_matched = True
-                break
+    # Mapping Jurusan ke mata pelajaran yang relevan (bobot lebih tinggi)
+    JURUSAN_SUBJECTS = {
+        "Informatika": ["Nilai_Matematika", "Nilai_Bahasa_Inggris", "Nilai_Fisika"],
+        "Teknik Komputer": ["Nilai_Matematika", "Nilai_Fisika", "Nilai_Kimia"],
+        "Sistem Informasi": ["Nilai_Matematika", "Nilai_Bahasa_Indonesia", "Nilai_Ekonomi"],
+        "Teknik Elektro": ["Nilai_Matematika", "Nilai_Fisika", "Nilai_Kimia"],
+        "Akuntansi": ["Nilai_Matematika", "Nilai_Ekonomi", "Nilai_Bahasa_Indonesia"],
+        "Manajemen": ["Nilai_Ekonomi", "Nilai_Bahasa_Indonesia", "Nilai_Matematika"],
+        "Ekonomi": ["Nilai_Ekonomi", "Nilai_Matematika", "Nilai_Bahasa_Indonesia"],
+        "Keuangan": ["Nilai_Matematika", "Nilai_Ekonomi", "Nilai_Bahasa_Inggris"],
+        "Bisnis Digital": ["Nilai_Matematika", "Nilai_Bahasa_Inggris", "Nilai_Ekonomi"],
+        "Hukum": ["Nilai_Bahasa_Indonesia", "Nilai_Sosiologi", "Nilai_Geografi"],
+        "Ilmu Komunikasi": ["Nilai_Bahasa_Indonesia", "Nilai_Bahasa_Inggris", "Nilai_Sosiologi"],
+        "Hubungan Internasional": ["Nilai_Bahasa_Inggris", "Nilai_Bahasa_Indonesia", "Nilai_Sosiologi"],
+        "Sosiologi": ["Nilai_Sosiologi", "Nilai_Geografi", "Nilai_Bahasa_Indonesia"],
+        "Ilmu Politik": ["Nilai_Sosiologi", "Nilai_Geografi", "Nilai_Bahasa_Indonesia"],
+        "Kedokteran": ["Nilai_Biologi", "Nilai_Kimia", "Nilai_Fisika"],
+        "Kedokteran Gigi": ["Nilai_Biologi", "Nilai_Kimia", "Nilai_Fisika"],
+        "Farmasi": ["Nilai_Kimia", "Nilai_Biologi", "Nilai_Fisika"],
+        "Keperawatan": ["Nilai_Biologi", "Nilai_Kimia", "Nilai_IPA"],
+        "Fisika": ["Nilai_Fisika", "Nilai_Matematika", "Nilai_Kimia"],
+        "Kimia": ["Nilai_Kimia", "Nilai_Biologi", "Nilai_Fisika"],
+        "Biologi": ["Nilai_Biologi", "Nilai_Kimia", "Nilai_Fisika"],
+        "Matematika": ["Nilai_Matematika", "Nilai_Fisika", "Nilai_Bahasa_Inggris"],
+        "Teknik Sipil": ["Nilai_Matematika", "Nilai_Fisika", "Nilai_Geografi"],
+        "Arsitektur": ["Nilai_Fisika", "Nilai_Matematika", "Nilai_Geografi"],
+        "Teknik Mesin": ["Nilai_Matematika", "Nilai_Fisika", "Nilai_Kimia"],
+        "Teknik Industri": ["Nilai_Matematika", "Nilai_Ekonomi", "Nilai_Fisika"],
+        "Desain Komunikasi Visual": ["Nilai_Biologi", "Nilai_Bahasa_Indonesia", "Nilai_Bahasa_Inggris"],
+        "Seni Rupa": ["Nilai_Biologi", "Nilai_Bahasa_Indonesia", "Nilai_Sosiologi"],
+        "Desain Interior": ["Nilai_Fisika", "Nilai_Geografi", "Nilai_Biologi"],
+        "Film": ["Nilai_Bahasa_Indonesia", "Nilai_Bahasa_Inggris", "Nilai_Sosiologi"],
+        "Pendidikan Guru": ["Nilai_Bahasa_Indonesia", "Nilai_Biologi", "Nilai_Sosiologi"],
+        "Pendidikan Bahasa": ["Nilai_Bahasa_Indonesia", "Nilai_Bahasa_Inggris", "Nilai_Sosiologi"],
+        "Bimbangan Konseling": ["Nilai_Sosiologi", "Nilai_Bahasa_Indonesia", "Nilai_Biologi"],
+    }
 
-        # Cek sekunder jika tidak cocok dengan utama
-        if not is_matched and minat_sekunder:
-            cocok_jurusans = MINAT_JURUSAN_MAP.get(minat_sekunder, [])
-            for j in cocok_jurusans:
-                if j.lower() in j_lower:
-                    bonus = 15  # Bonus 15 poin
-                    is_matched = True
-                    break
+    # Mapping Jurusan ke soft skill yang relevan
+    JURUSAN_SKILLS = {
+        "Informatika": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Teknik Komputer": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Sistem Informasi": ["Kemampuan_Analitis", "Kemampuan_Sosial"],
+        "Teknik Elektro": ["Kemampuan_Analitis", "Kemampuan_Leadership"],
+        "Akuntansi": ["Kemampuan_Analitis", "Kemampuan_Sosial"],
+        "Manajemen": ["Kemampuan_Leadership", "Kemampuan_Sosial"],
+        "Ekonomi": ["Kemampuan_Analitis", "Kemampuan_Sosial"],
+        "Keuangan": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Bisnis Digital": ["Kemampuan_Kreatif", "Kemampuan_Sosial"],
+        "Hukum": ["Kemampuan_Analitis", "Kemampuan_Sosial"],
+        "Ilmu Komunikasi": ["Kemampuan_Sosial", "Kemampuan_Kreatif"],
+        "Hubungan Internasional": ["Kemampuan_Sosial", "Kemampuan_Leadership"],
+        "Sosiologi": ["Kemampuan_Sosial", "Kemampuan_Kreatif"],
+        "Ilmu Politik": ["Kemampuan_Leadership", "Kemampuan_Sosial"],
+        "Kedokteran": ["Kemampuan_Analitis", "Kemampuan_Sosial"],
+        "Kedokteran Gigi": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Farmasi": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Keperawatan": ["Kemampuan_Sosial", "Kemampuan_Leadership"],
+        "Fisika": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Kimia": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Biologi": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Matematika": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Teknik Sipil": ["Kemampuan_Analitis", "Kemampuan_Leadership"],
+        "Arsitektur": ["Kemampuan_Kreatif", "Kemampuan_Analitis"],
+        "Teknik Mesin": ["Kemampuan_Analitis", "Kemampuan_Kreatif"],
+        "Teknik Industri": ["Kemampuan_Leadership", "Kemampuan_Analitis"],
+        "Desain Komunikasi Visual": ["Kemampuan_Kreatif", "Kemampuan_Sosial"],
+        "Seni Rupa": ["Kemampuan_Kreatif", "Kemampuan_Analitis"],
+        "Desain Interior": ["Kemampuan_Kreatif", "Kemampuan_Analitis"],
+        "Film": ["Kemampuan_Kreatif", "Kemampuan_Sosial"],
+        "Pendidikan Guru": ["Kemampuan_Sosial", "Kemampuan_Kreatif"],
+        "Pendidikan Bahasa": ["Kemampuan_Sosial", "Kemampuan_Kreatif"],
+        "Bimbingan Konseling": ["Kemampuan_Sosial", "Kemampuan_Leadership"],
+    }
 
-        return bonus, is_matched
+    # Mapping Kepribadian ke Jurusan yang cocok
+    KEPRIBADIAN_JURUSAN_MAP = {
+        "Analyst": ["Informatika", "Fisika", "Kimia", "Biologi", "Matematika", "Kedokteran", "Farmasi"],
+        "Diplomat": ["Hukum", "Ilmu Komunikasi", "Hubungan Internasional", "Pendidikan Guru", "Bimbingan Konseling"],
+        "Sentinel": ["Akuntansi", "Manajemen", "Teknik Sipil", "Teknik Mesin", "Teknik Elektro"],
+        "Explorer": ["Desain Komunikasi Visual", "Seni Rupa", "Film", "Arsitektur", "Bisnis Digital"],
+    }
 
-    # Hitung skor yang disesuaikan dengan Minat
-    adjusted_scores = []
-    for idx, p in enumerate(proba):
-        universitas = classes[idx]
-        bonus, is_matched = _calculate_minat_boost(universitas, minat_utama, minat_sek)
-        # Skor dalam %, lalu tambahkan bonus (maks 100 + 30 = 130, lalu di-clamp ke 100)
-        base_score = float(p) * 100  # Konversi ke %
-        adjusted_score = min(100, base_score + bonus)  # clamp ke max 100%
-        adjusted_scores.append({
-            "idx": idx,
-            "score": p,
-            "adjusted_score": adjusted_score,
-            "base_score": base_score,
-            "bonus": bonus,
-            "jurusan": classes[idx],
-            "is_minat_matched": is_matched
-        })
+    # Ambil semua jurusan dari database jika memungkinkan, fallback ke list default
+    try:
+        _, _, encoder = load_models()
+        all_jurusans = list(encoder.classes_)
+    except:
+        # Fallback ke list default jika model belum ada
+        all_jurusans = [
+            "Informatika", "Teknik Komputer", "Sistem Informasi", "Teknik Elektro",
+            "Akuntansi", "Manajemen", "Ekonomi", "Keuangan", "Bisnis Digital",
+            "Hukum", "Ilmu Komunikasi", "Hubungan Internasional", "Sosiologi", "Ilmu Politik",
+            "Kedokteran", "Kedokteran Gigi", "Farmasi", "Keperawatan",
+            "Fisika", "Kimia", "Biologi", "Matematika",
+            "Teknik Sipil", "Arsitektur", "Teknik Mesin", "Teknik Industri",
+            "Desain Komunikasi Visual", "Seni Rupa", "Desain Interior", "Film",
+            "Pendidikan Guru", "Pendidikan Bahasa", "Bimbingan Konseling",
+        ]
 
-    # Urutkan berdasarkan adjusted score
-    adjusted_scores.sort(key=lambda x: x["adjusted_score"], reverse=True)
+    def _calculate_jurusan_score(jurusan: str) -> dict:
+        """Hitung skor untuk satu jurusan berdasarkan input siswa."""
+        # 1. Nilai Akademik (40%)
+        subject_cols = JURUSAN_SUBJECTS.get(jurusan, ["Nilai_Matematika", "Nilai_Bahasa_Indonesia", "Nilai_IPA"])
+        nilai_total = 0
+        for col in subject_cols:
+            nilai_total += input_dict.get(col, 0)
+        avg_nilai = nilai_total / len(subject_cols) if subject_cols else 0
+        score_nilai = (avg_nilai / 100) * 40  # Maks 40 poin
+
+        # 2. Minat (30%)
+        score_minat = 0
+        minat_jurusan = JURUSAN_MINAT_MAP.get(jurusan, "")
+        is_minat_matched = False
+
+        if minat_jurusan == minat_utama:
+            score_minat = 30
+            is_minat_matched = True
+        elif minat_jurusan == minat_sek:
+            score_minat = 15
+            is_minat_matched = True
+        elif minat_utama == minat_sek:
+            # Jika minat utama sama dengan sekunder, berikan 20 poin
+            score_minat = 20
+            is_minat_matched = True
+
+        # 3. Kepribadian (15%)
+        score_kepribadian = 0
+        matched_kepribadians = KEPRIBADIAN_JURUSAN_MAP.get(kepribadian, [])
+        if any(j.lower() in jurusan.lower() for j in matched_kepribadians):
+            score_kepribadian = 15
+
+        # 4. Soft Skills (15%)
+        skill_cols = JURUSAN_SKILLS.get(jurusan, ["Kemampuan_Analitis", "Kemampuan_Kreatif"])
+        skill_total = 0
+        for col in skill_cols:
+            skill_total += input_dict.get(col, 5)
+        avg_skill = skill_total / len(skill_cols) if skill_cols else 5
+        score_skill = (avg_skill / 10) * 15  # Maks 15 poin (karena skala 1-10)
+
+        # Total skor
+        total_score = score_nilai + score_minat + score_kepribadian + score_skill
+
+        return {
+            "jurusan": jurusan,
+            "score": round(total_score, 1),
+            "score_nilai": round(score_nilai, 1),
+            "score_minat": round(score_minat, 1),
+            "score_kepribadian": round(score_kepribadian, 1),
+            "score_skill": round(score_skill, 1),
+            "minat_match": is_minat_matched,
+        }
+
+    # Hitung skor untuk setiap jurusan
+    all_scores = []
+    for j in all_jurusans:
+        result = _calculate_jurusan_score(j)
+        all_scores.append(result)
+
+    # Urutkan berdasarkan skor total
+    all_scores.sort(key=lambda x: x["score"], reverse=True)
 
     # Ambil top N
-    recommendations = []
-    for item in adjusted_scores[:n]:
-        recommendations.append({
-            "jurusan": item["jurusan"],
-            "score": round(item["adjusted_score"], 1),
-            "base_score": round(item["base_score"], 1),
-            "bonus": item["bonus"],
-            "minat_match": item["is_minat_matched"],
-        })
+    recommendations = all_scores[:n]
 
     return recommendations
 
